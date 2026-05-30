@@ -94,22 +94,18 @@ pub fn summarize_bins(bws: &[PathBuf], opts: &SummaryOpts) -> Result<SignalMatri
 
     let mut handles: Vec<BigWig> = bws.iter().map(|p| BigWig::open(p)).collect::<Result<_>>()?;
 
-    // Common chromosomes: intersection across all files, in first-file B-tree order.
     let common = common_chroms(&handles);
 
     let bin_size = opts.bin_size;
     let bs = bin_size as usize;
 
-    // Pre-allocate the region list and a column-major values matrix.
     let total_bins: usize = common.iter().map(|(_, l)| (*l as usize).div_ceil(bs)).sum();
     let mut regions: Vec<(String, u32, u32)> = Vec::with_capacity(total_bins);
-    // values_col[col] = column vector for one bigWig, accumulated row-by-row.
     let mut values_col: Vec<Vec<f64>> = vec![Vec::with_capacity(total_bins); bws.len()];
 
     for (chrom, chrom_len) in &common {
         let n_bins = (*chrom_len as usize).div_ceil(bs);
 
-        // Build the region list for this chromosome.
         for bin_idx in 0..n_bins {
             // bin_idx < chrom_len / bin_size ≤ u32::MAX; safe cast.
             #[allow(clippy::cast_possible_truncation)]
@@ -158,7 +154,6 @@ pub fn summarize_bins(bws: &[PathBuf], opts: &SummaryOpts) -> Result<SignalMatri
         }
     }
 
-    // Transpose from column-major to row-major.
     let values: Vec<Vec<f64>> = (0..total_bins)
         .map(|row| values_col.iter().map(|col| col[row]).collect())
         .collect();
@@ -185,7 +180,6 @@ pub fn summarize_bed(bws: &[PathBuf], bed_path: &Path, opts: &SummaryOpts) -> Re
     let regions_bed = load_bed(bed_path)?;
     let mut handles: Vec<BigWig> = bws.iter().map(|p| BigWig::open(p)).collect::<Result<_>>()?;
 
-    // Chrom rank from the first bigWig's B-tree order.
     let chrom_rank: HashMap<String, usize> = handles[0]
         .chroms()
         .enumerate()
@@ -239,7 +233,6 @@ fn common_chroms(handles: &[BigWig]) -> Vec<(String, u32)> {
         return first_order;
     }
 
-    // Build len maps for the remaining files.
     let rest_maps: Vec<HashMap<&str, u32>> = handles[1..]
         .iter()
         .map(|bw| bw.chroms().collect())
